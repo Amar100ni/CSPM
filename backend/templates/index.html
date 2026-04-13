@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>CSPM – Cloud Security Posture Management</title>
+  <meta name="description" content="Enterprise cloud security posture management dashboard."/>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#x1F6E1;</text></svg>"/>
+  <link rel="stylesheet" href="/static/style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ════════════════════════════ APP SHELL ════════════════════════════ -->
+<div id="app-shell">
+
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">&#x1F6E1;</div>
+      <div class="logo-text">CS<span>PM</span></div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Main</div>
+      <div class="nav-item active" id="nav-dashboard" onclick="showPage('dashboard')"><span class="nav-icon">&#x1F4CA;</span><span>Dashboard</span></div>
+      <div class="nav-item" id="nav-report"    onclick="showPage('report')"   ><span class="nav-icon">&#x1F4CB;</span><span>Compliance Report</span></div>
+      <div class="nav-item" id="nav-resources" onclick="showPage('resources')"><span class="nav-icon">&#x2601;</span><span>AWS Resources</span></div>
+      <div class="nav-item" id="nav-history"   onclick="showPage('history')"  ><span class="nav-icon">&#x1F552;</span><span>Scan History</span></div>
+      <div class="nav-label" style="margin-top:16px">System</div>
+      <div class="nav-item" id="nav-settings"  onclick="showPage('settings')" ><span class="nav-icon">&#x2699;</span><span>Settings</span></div>
+      <div class="nav-item" id="nav-scan"       onclick="triggerScan()"       ><span class="nav-icon">&#x26A1;</span><span>Run Scan</span></div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar">?</div>
+        <div class="user-info">
+          <div class="user-name" id="user-display-name">Guest</div>
+          <div class="user-role" id="user-role-label">Not signed in</div>
+        </div>
+      </div>
+      <button class="btn btn-ghost w-full" style="margin-top:10px;justify-content:center" id="auth-btn" onclick="openAuthModal()">
+        &#x1F511; <span>Sign In</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Sidebar toggle -->
+  <button class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">&#x276E;</button>
+
+  <!-- Main -->
+  <div id="main-content">
+    <header class="topbar">
+      <div class="topbar-title">Cloud <span>Security</span> Posture Management</div>
+      <div class="topbar-actions">
+        <span id="topbar-date" class="text-sm" style="color:var(--text-muted)"></span>
+        <div class="notif-bell" onclick="showPage('report')" title="View failing checks">
+          &#x1F514;
+          <div class="notif-badge" id="notif-badge">0</div>
+        </div>
+        <button class="btn btn-primary" id="scan-btn" onclick="triggerScan()">&#x26A1; Run Scan</button>
+        <button class="btn btn-outline" id="topbar-auth-btn" onclick="openAuthModal()">Sign In</button>
+      </div>
+    </header>
+
+    <div class="page-content">
+
+      <!-- ══ DASHBOARD ════════════════════════════════════════════════ -->
+      <div class="page active" id="page-dashboard">
+        <div class="section-header" style="margin-bottom:24px">
+          <h1 class="section-title">Overview Dashboard</h1>
+          <span class="badge badge-info" id="last-scan-badge">Live</span>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card blue"><div class="stat-card-icon">&#x1F522;</div><div class="stat-label">Total Checks</div><div class="stat-value" id="stat-total">-</div><div class="stat-sub">Across all resources</div></div>
+          <div class="stat-card green"><div class="stat-card-icon">&#x2705;</div><div class="stat-label">Passed</div><div class="stat-value" id="stat-passed">-</div><div class="stat-sub">No action needed</div></div>
+          <div class="stat-card red"><div class="stat-card-icon">&#x1F6A8;</div><div class="stat-label">Failed</div><div class="stat-value" id="stat-failed">-</div><div class="stat-sub">Require immediate fix</div></div>
+          <div class="stat-card yellow"><div class="stat-card-icon">&#x26A0;</div><div class="stat-label">Warnings</div><div class="stat-value" id="stat-warnings">-</div><div class="stat-sub">Medium priority</div></div>
+        </div>
+
+        <div class="charts-grid">
+          <!-- Score ring -->
+          <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:320px">
+            <div class="section-title" style="margin-bottom:4px">Compliance Score</div>
+            <div class="score-ring-wrap">
+              <div class="score-ring">
+                <svg width="180" height="180" viewBox="0 0 180 180">
+                  <circle class="track" cx="90" cy="90" r="80"/>
+                  <circle class="progress" id="score-circle" cx="90" cy="90" r="80"/>
+                </svg>
+                <div class="score-text">
+                  <div class="score-num" id="score-num">-</div>
+                  <div class="score-pct">%</div>
+                </div>
+              </div>
+              <div class="score-label">Overall Posture</div>
+              <div class="score-tag" id="score-tag">-</div>
+            </div>
+          </div>
+
+          <!-- Bar + Pie stacked -->
+          <div style="display:flex;flex-direction:column;gap:18px">
+            <div class="card">
+              <div class="section-header"><div class="section-title">Issues by Service</div></div>
+              <div class="chart-container" style="height:210px"><canvas id="bar-chart"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="section-header"><div class="section-title">Severity Breakdown</div></div>
+              <div class="chart-container" style="height:180px"><canvas id="pie-chart"></canvas></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Critical/High Findings -->
+        <div class="section-header">
+          <div class="section-title">Recent Critical / High Findings</div>
+        </div>
+        <div class="findings-grid" id="recent-findings-grid">
+          <div class="loading-state"><div class="loading-spinner"></div></div>
+        </div>
+
+        <div class="scan-output" id="scan-output-box"></div>
+      </div><!-- /dashboard -->
+
+
+      <!-- ══ COMPLIANCE REPORT ════════════════════════════════════════ -->
+      <div class="page" id="page-report">
+        <div class="section-header">
+          <h1 class="section-title">Compliance Report</h1>
+          <button class="btn btn-outline" onclick="loadReport()">&#x21BB; Refresh</button>
+        </div>
+        <div class="filter-bar">
+          <select class="filter-select" id="filter-resource" onchange="applyFilters()">
+            <option value="">All Resources</option>
+            <option value="S3">S3</option><option value="IAM">IAM</option>
+            <option value="EC2">EC2</option><option value="RDS">RDS</option><option value="VPC">VPC</option>
+          </select>
+          <select class="filter-select" id="filter-status" onchange="applyFilters()">
+            <option value="">All Status</option>
+            <option value="PASS">PASS</option><option value="FAIL">FAIL</option><option value="WARNING">WARNING</option>
+          </select>
+          <select class="filter-select" id="filter-severity" onchange="applyFilters()">
+            <option value="">All Severities</option>
+            <option value="CRITICAL">Critical</option><option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option><option value="LOW">Low</option>
+          </select>
+          <span class="text-sm" style="color:var(--text-muted);margin-left:auto" id="report-count">0 findings</span>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table id="report-table">
+              <thead><tr>
+                <th onclick="sortTable('resource')">Resource</th>
+                <th onclick="sortTable('check')">Check / Finding</th>
+                <th onclick="sortTable('status')">Status</th>
+                <th onclick="sortTable('severity')">Severity</th>
+                <th>Recommendation</th>
+              </tr></thead>
+              <tbody id="report-tbody">
+                <tr><td colspan="5"><div class="loading-state"><div class="loading-spinner"></div><span>Loading findings...</span></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /report -->
+
+
+      <!-- ══ AWS RESOURCES ════════════════════════════════════════════ -->
+      <div class="page" id="page-resources">
+        <div class="section-header">
+          <h1 class="section-title">AWS Resources</h1>
+          <button class="btn btn-outline" onclick="loadResources()">&#x21BB; Refresh</button>
+        </div>
+        <div class="resource-grid" id="resource-grid">
+          <div class="loading-state" style="grid-column:1/-1"><div class="loading-spinner"></div><span>Loading AWS config...</span></div>
+        </div>
+      </div><!-- /resources -->
+
+
+      <!-- ══ SCAN HISTORY ═════════════════════════════════════════════ -->
+      <div class="page" id="page-history">
+        <div class="section-header">
+          <h1 class="section-title">Scan History</h1>
+          <div class="flex gap-2">
+            <button class="btn btn-outline" onclick="loadHistory()">&#x21BB; Refresh</button>
+            <button class="btn btn-danger" onclick="clearAllScans()">&#x1F5D1; Clear All</button>
+          </div>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="table-wrap">
+            <table id="history-table">
+              <thead><tr>
+                <th>#</th><th>User</th><th>Type</th><th>Status</th>
+                <th>Output Preview</th><th>Scanned At</th><th>Actions</th>
+              </tr></thead>
+              <tbody id="history-tbody">
+                <tr><td colspan="7"><div class="loading-state"><div class="loading-spinner"></div><span>Loading...</span></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div><!-- /history -->
+
+
+      <!-- ══ SETTINGS ═════════════════════════════════════════════════ -->
+      <div class="page" id="page-settings">
+        <div class="section-header">
+          <h1 class="section-title">Settings</h1>
+          <button class="btn btn-outline" onclick="loadSettings()">&#x21BB; Refresh Status</button>
+        </div>
+        <div class="settings-grid">
+
+          <!-- DB Status -->
+          <div class="card">
+            <div class="section-title" style="margin-bottom:18px">System Status</div>
+            <div class="status-indicator mb-3" id="db-status-box">
+              <div class="status-dot red pulse" id="db-dot"></div>
+              <div>
+                <div class="status-label" id="db-status-label">Checking PostgreSQL...</div>
+                <div class="status-sub" id="db-status-sub">cspm_db @ localhost</div>
+              </div>
+            </div>
+            <div class="status-indicator" id="java-status-box">
+              <div class="status-dot red pulse" id="java-dot"></div>
+              <div>
+                <div class="status-label" id="java-status-label">Checking Java Engine...</div>
+                <div class="status-sub">ComplianceEngine.java</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- AWS Config -->
+          <div class="card">
+            <div class="section-title" style="margin-bottom:18px">AWS Configuration</div>
+            <form onsubmit="saveSettings(event)">
+              <div class="form-group">
+                <label class="form-label" for="aws-region">AWS Region</label>
+                <input class="form-input" type="text" id="aws-region" placeholder="us-east-1"/>
+              </div>
+              <button class="btn btn-primary" type="submit">Save Settings</button>
+            </form>
+          </div>
+
+          <!-- Preferences -->
+          <div class="card" style="grid-column:1/-1">
+            <div class="section-title" style="margin-bottom:18px">Preferences</div>
+            <div class="toggle-row">
+              <div>
+                <div class="toggle-label">Dark / Light Mode</div>
+                <div class="toggle-desc">Switch between dark and light UI themes</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="theme-toggle" onchange="toggleTheme(this)"/>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+      </div><!-- /settings -->
+
+    </div><!-- /page-content -->
+  </div><!-- /main-content -->
+</div><!-- /app-shell -->
+
+
+<!-- ════════════ AUTH MODAL ════════════ -->
+<div class="modal-backdrop" id="auth-modal" onclick="closeOnBackdrop(event,'auth-modal')">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="auth-modal-title">Welcome Back</div>
+      <button class="modal-close" onclick="closeModal('auth-modal')">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tab-login"    onclick="switchTab('login')">Sign In</button>
+        <button class="modal-tab"        id="tab-register" onclick="switchTab('register')">Register</button>
+      </div>
+      <form id="login-form" onsubmit="handleLogin(event)">
+        <div class="form-group"><label class="form-label" for="login-username">Username</label><input class="form-input" type="text" id="login-username" placeholder="Your username" autocomplete="username" required/></div>
+        <div class="form-group"><label class="form-label" for="login-password">Password</label><input class="form-input" type="password" id="login-password" placeholder="Your password" autocomplete="current-password" required/></div>
+        <div class="form-error" id="login-error"></div>
+        <button class="btn btn-primary w-full" type="submit" id="login-submit" style="justify-content:center;margin-top:8px">Sign In</button>
+      </form>
+      <form id="register-form" onsubmit="handleRegister(event)" style="display:none">
+        <div class="form-group"><label class="form-label" for="reg-username">Username</label><input class="form-input" type="text" id="reg-username" placeholder="Choose a username" autocomplete="username" required/></div>
+        <div class="form-group"><label class="form-label" for="reg-email">Email</label><input class="form-input" type="email" id="reg-email" placeholder="your@email.com" autocomplete="email" required/></div>
+        <div class="form-group"><label class="form-label" for="reg-password">Password</label><input class="form-input" type="password" id="reg-password" placeholder="Min 8 characters" autocomplete="new-password" required minlength="8"/></div>
+        <div class="form-error" id="reg-error"></div>
+        <button class="btn btn-primary w-full" type="submit" id="reg-submit" style="justify-content:center;margin-top:8px">Create Account</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════ SCAN DETAILS MODAL ════════════ -->
+<div class="modal-backdrop" id="detail-modal" onclick="closeOnBackdrop(event,'detail-modal')">
+  <div class="modal" style="width:780px;max-width:96vw">
+    <div class="modal-header">
+      <div class="modal-title" id="detail-modal-title">Scan Details</div>
+      <button class="modal-close" onclick="closeModal('detail-modal')">&#x2715;</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px 24px">
+      <!-- meta badges row -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px" id="detail-meta"></div>
+      <!-- summary stat strip (hidden until populated) -->
+      <div id="detail-summary" style="display:none;gap:10px;margin-bottom:16px"></div>
+      <!-- java output (shown only when no findings) -->
+      <div class="scan-detail-pre" id="detail-output" style="display:none"></div>
+      <!-- findings table -->
+      <div id="detail-findings-wrap" style="display:none">
+        <div class="table-wrap" style="border-radius:8px;border:1px solid var(--border)">
+          <table id="detail-findings-table">
+            <thead><tr>
+              <th style="cursor:default">Resource</th>
+              <th style="cursor:default">Check / Finding</th>
+              <th style="cursor:default">Status</th>
+              <th style="cursor:default">Severity</th>
+              <th style="cursor:default">Recommendation</th>
+            </tr></thead>
+            <tbody id="detail-findings-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<!-- ════════════════════════════ JS ════════════════════════════ -->
+<script>
+/* ── State ── */
+const API = '';
+let authToken   = localStorage.getItem('cspm_token') || null;
+let authUser    = localStorage.getItem('cspm_user')  || null;
+let allFindings = [];
+let sortState   = { col: null, asc: true };
+let barChart, pieChart;
+let sidebarCollapsed = false;
+
+/* ── Boot ── */
+document.addEventListener('DOMContentLoaded', () => {
+  updateTopBar();
+  updateDate();
+  setInterval(updateDate, 60000);
+  loadDashboard();
+  // restore theme
+  if (localStorage.getItem('cspm_light') === '1') {
+    document.body.classList.add('light-mode');
+    document.getElementById('theme-toggle').checked = true;
+  }
+});
+
+function updateDate() {
+  document.getElementById('topbar-date').textContent =
+    new Date().toLocaleDateString('en-IN',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+}
+
+/* ── Sidebar toggle ── */
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  const sb  = document.getElementById('sidebar');
+  const mc  = document.getElementById('main-content');
+  const btn = document.getElementById('sidebar-toggle');
+  sb.classList.toggle('collapsed', sidebarCollapsed);
+  mc.classList.toggle('expanded',  sidebarCollapsed);
+  btn.innerHTML = sidebarCollapsed ? '&#x276F;' : '&#x276E;';
+  btn.style.left = sidebarCollapsed ? '50px' : 'calc(var(--sidebar-w) - 14px)';
+}
+
+/* ── Page Nav ── */
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p  => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  const ni = document.getElementById('nav-' + name);
+  if (ni) ni.classList.add('active');
+  if (name === 'report')    loadReport();
+  if (name === 'resources') loadResources();
+  if (name === 'history')   loadHistory();
+  if (name === 'settings')  loadSettings();
+}
+
+/* ── API helper ── */
+async function apiFetch(url, opts = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  const res  = await fetch(API + url, { ...opts, headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+  return data;
+}
+
+/* ══════════════════════════════════════
+   DASHBOARD
+   ══════════════════════════════════════ */
+async function loadDashboard() {
+  try {
+    const s = await apiFetch('/api/dashboard/stats');
+    renderDashboard(s);
+  } catch(e) {
+    showToast('Dashboard error: ' + e.message, 'error');
+  }
+}
+
+function renderDashboard(s) {
+  document.getElementById('stat-total').textContent    = s.total_checks ?? '-';
+  document.getElementById('stat-passed').textContent   = s.passed       ?? '-';
+  document.getElementById('stat-failed').textContent   = s.failed       ?? '-';
+  document.getElementById('stat-warnings').textContent = s.warnings     ?? '-';
+
+  const score = s.compliance_score ?? 0;
+  animateScore(score);
+
+  // Notification badge
+  const failCount = s.failed ?? 0;
+  const nb = document.getElementById('notif-badge');
+  nb.textContent = failCount;
+  nb.classList.toggle('show', failCount > 0);
+
+  // Last-scan badge
+  const lb = document.getElementById('last-scan-badge');
+  lb.textContent = 'Live';
+  lb.className   = 'badge ' + (score >= 80 ? 'badge-pass' : score >= 50 ? 'badge-warning' : 'badge-fail');
+
+  renderBarChart(s.service_breakdown  || {});
+  renderPieChart(s.severity_breakdown || {});
+  renderRecentFindings(s.recent_findings || []);
+}
+
+function animateScore(score) {
+  const circle = document.getElementById('score-circle');
+  const numEl  = document.getElementById('score-num');
+  const tagEl  = document.getElementById('score-tag');
+  const circ   = 2 * Math.PI * 80; // ~502.65
+
+  let color, cls, text;
+  if (score >= 80)      { color = '#22c55e'; cls = 'good';   text = 'Healthy';  }
+  else if (score >= 50) { color = '#f59e0b'; cls = 'medium'; text = 'Moderate'; }
+  else                  { color = '#ef4444'; cls = 'poor';   text = 'At Risk';  }
+
+  circle.style.stroke = color;
+  numEl.style.color   = color;
+  requestAnimationFrame(() => { circle.style.strokeDashoffset = circ - (score / 100) * circ; });
+
+  let cur = 0; const step = score / 60;
+  const iv = setInterval(() => {
+    cur = Math.min(cur + step, score);
+    numEl.textContent = Math.round(cur);
+    if (cur >= score) clearInterval(iv);
+  }, 16);
+
+  tagEl.textContent = text;
+  tagEl.className   = 'score-tag ' + cls;
+}
+
+function renderBarChart(bd) {
+  const ctx = document.getElementById('bar-chart').getContext('2d');
+  if (barChart) barChart.destroy();
+  const labels = Object.keys(bd);
+  const values = Object.values(bd);
+  barChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets: [{ label: 'Issues', data: values,
+      backgroundColor: ['rgba(59,130,246,.7)','rgba(168,85,247,.7)','rgba(239,68,68,.7)','rgba(245,158,11,.7)','rgba(6,182,212,.7)'],
+      borderRadius: 6, borderSkipped: false }] },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#94a3b8' } },
+        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#94a3b8', stepSize: 1 }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderPieChart(bd) {
+  const ctx = document.getElementById('pie-chart').getContext('2d');
+  if (pieChart) pieChart.destroy();
+  const colors = { CRITICAL:'#ef4444', HIGH:'#f97316', MEDIUM:'#f59e0b', LOW:'#06b6d4', INFO:'#a855f7' };
+  const labels = Object.keys(bd).filter(k => bd[k] > 0);
+  const values = labels.map(k => bd[k]);
+  pieChart = new Chart(ctx, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data: values,
+      backgroundColor: labels.map(l => colors[l] || '#64748b'),
+      borderColor: '#1e293b', borderWidth: 3, hoverOffset: 8 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: '65%',
+      plugins: { legend: { position: 'right', labels: { color: '#94a3b8', padding: 10, font: { size: 11 } } } }
+    }
+  });
+}
+
+function renderRecentFindings(findings) {
+  const grid = document.getElementById('recent-findings-grid');
+  if (!findings.length) {
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">&#x2705;</div><div class="empty-state-title">No critical or high findings</div></div>';
+    return;
+  }
+  grid.innerHTML = findings.map(f => `
+    <div class="recent-finding-card ${f.severity.toLowerCase()}">
+      <div class="rfc-header">
+        <span class="rfc-resource">${escHtml(f.resource)}</span>
+        ${severityBadge(f.severity)}
+      </div>
+      <div class="rfc-desc">${escHtml(f.check)}</div>
+      <div class="rfc-rec">&#x1F4A1; ${escHtml(f.recommendation)}</div>
+    </div>`).join('');
+}
+
+/* ══════════════════════════════════════
+   COMPLIANCE REPORT
+   ══════════════════════════════════════ */
+async function loadReport() {
+  document.getElementById('report-tbody').innerHTML =
+    '<tr><td colspan="5"><div class="loading-state"><div class="loading-spinner"></div><span>Loading findings...</span></div></td></tr>';
+  try {
+    const data = await apiFetch('/api/report');
+    allFindings = data.findings || [];
+    applyFilters();
+  } catch(e) {
+    document.getElementById('report-tbody').innerHTML =
+      `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">&#x26A0;</div><div class="empty-state-title">${e.message}</div></div></td></tr>`;
+  }
+}
+
+function applyFilters() {
+  const res = document.getElementById('filter-resource').value;
+  const st  = document.getElementById('filter-status').value;
+  const sev = document.getElementById('filter-severity').value;
+  let filtered = allFindings.filter(f =>
+    (!res || f.resource === res) && (!st || f.status === st) && (!sev || f.severity === sev)
+  );
+  if (sortState.col) {
+    filtered.sort((a,b) => {
+      const av = (a[sortState.col]||'').toString().toLowerCase();
+      const bv = (b[sortState.col]||'').toString().toLowerCase();
+      return sortState.asc ? av.localeCompare(bv) : bv.localeCompare(av);
+    });
+  }
+  renderReportTable(filtered);
+  document.getElementById('report-count').textContent = filtered.length + ' finding' + (filtered.length!==1?'s':'');
+}
+
+function sortTable(col) {
+  document.querySelectorAll('#report-table thead th').forEach(th => th.className = '');
+  sortState.asc = sortState.col === col ? !sortState.asc : true;
+  sortState.col = col;
+  const th = [...document.querySelectorAll('#report-table thead th')]
+    .find(t => (t.getAttribute('onclick')||'').includes(col));
+  if (th) th.className = sortState.asc ? 'sorted-asc' : 'sorted-desc';
+  applyFilters();
+}
+
+const BADGE_TIPS = {
+  PASS:    'This check passed — no issues found.',
+  FAIL:    'This check failed — immediate remediation required.',
+  WARNING: 'This check has a medium-severity issue that should be addressed.',
+};
+const SEV_TIPS = {
+  CRITICAL:'Critical severity — stop everything and fix now.',
+  HIGH:    'High severity — fix within 24-72 hours.',
+  MEDIUM:  'Medium severity — fix within 30 days.',
+  LOW:     'Low severity — fix at next maintenance window.',
+  INFO:    'Informational — review manually.',
+};
+
+function renderReportTable(findings) {
+  const tbody = document.getElementById('report-tbody');
+  if (!findings.length) {
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state"><div class="empty-state-icon">&#x2705;</div><div class="empty-state-title">No findings match your filters</div></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = findings.map(f => `
+    <tr>
+      <td><span class="badge badge-info">${f.resource}</span></td>
+      <td style="max-width:260px;word-break:break-word">${escHtml(f.check)}</td>
+      <td>${statusBadge(f.status)}</td>
+      <td>${severityBadge(f.severity)}</td>
+      <td style="color:var(--text-secondary);max-width:250px;word-break:break-word">${escHtml(f.recommendation)}</td>
+    </tr>`).join('');
+}
+
+function statusBadge(s) {
+  const map = { PASS:'badge-pass', FAIL:'badge-fail', WARNING:'badge-warning' };
+  const tip = BADGE_TIPS[s] || '';
+  return `<span class="badge ${map[s]||'badge-info'}" data-tooltip="${tip}">${s}</span>`;
+}
+function severityBadge(s) {
+  const map = { CRITICAL:'badge-critical', HIGH:'badge-high', MEDIUM:'badge-medium', LOW:'badge-low', INFO:'badge-info-sev' };
+  const tip = SEV_TIPS[s] || '';
+  return `<span class="badge ${map[s]||'badge-info'}" data-tooltip="${tip}">${s}</span>`;
+}
+
+/* ══════════════════════════════════════
+   AWS RESOURCES
+   ══════════════════════════════════════ */
+async function loadResources() {
+  const grid = document.getElementById('resource-grid');
+  grid.innerHTML = '<div class="loading-state" style="grid-column:1/-1"><div class="loading-spinner"></div><span>Loading...</span></div>';
+  try {
+    renderResources(await apiFetch('/api/resources'));
+  } catch(e) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">&#x274C;</div><div class="empty-state-title">${e.message}</div></div>`;
+  }
+}
+
+function boolProp(val, trueLabel, falseLabel) {
+  if (val === true  || val === 'true'  || val === 'Enabled')  return `<span class="resource-prop-val ok">${trueLabel  || '&#x2705; Yes'}</span>`;
+  if (val === false || val === 'false' || val === 'Disabled') return `<span class="resource-prop-val err">${falseLabel || '&#x274C; No'}</span>`;
+  return `<span class="resource-prop-val warn">${escHtml(String(val))}</span>`;
+}
+
+function renderResources(cfg) {
+  const grid  = document.getElementById('resource-grid');
+  const cards = [];
+
+  // S3
+  if (cfg.S3) {
+    const s3 = cfg.S3;
+    const buckets = s3.Buckets || [];
+    const bad = buckets.some(b => b.public_access || b.ACL_Public || !b.encryption || !b.Encryption);
+    cards.push(`
+      <div class="resource-card ${bad?'misconfigured':'secure'}">
+        <div class="resource-header">
+          <div class="resource-title"><div class="resource-icon" style="background:rgba(245,158,11,.15)">&#x1FAA3;</div>Amazon S3</div>
+          <span class="badge ${bad?'badge-fail':'badge-pass'}">${bad?'Issues Found':'Secure'}</span>
+        </div>
+        <div class="resource-prop"><span class="resource-prop-key">Bucket Count</span><span class="resource-prop-val">${s3.BucketCount||buckets.length||0}</span></div>
+        ${buckets.map(b=>`
+          <div class="resource-prop" style="margin-top:8px"><span class="resource-prop-key" style="font-weight:700">&#x1F4E6; ${escHtml(b.Name||'bucket')}</span></div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Public Access</span>${boolProp(!b.public_access && !b.ACL_Public,'&#x1F512; Blocked','&#x26A0; Public')}</div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Encryption</span>${boolProp(b.encryption||b.Encryption,'&#x2705; Enabled','&#x274C; Disabled')}</div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Versioning</span>${boolProp(b.versioning !== false && b.Versioning !== 'Disabled' && b.Versioning,'&#x2705; Enabled','&#x274C; Disabled')}</div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Logging</span>${boolProp(b.logging,'&#x2705; Enabled','&#x274C; Disabled')}</div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Bucket Policy</span><span class="resource-prop-val ${b.bucket_policy==='permissive'?'err':'ok'}">${escHtml(b.bucket_policy||'–')}</span></div>
+        `).join('')}
+      </div>`);
+  }
+
+  // IAM
+  if (cfg.IAM) {
+    const iam = cfg.IAM;
+    const mfaMap  = iam.UserMFA || {};
+    const anyBad  = !iam.mfa_enabled || iam.root_account_used || iam.unused_keys > 0 || !iam.least_privilege;
+    cards.push(`
+      <div class="resource-card ${anyBad?'misconfigured':'secure'}">
+        <div class="resource-header">
+          <div class="resource-title"><div class="resource-icon" style="background:rgba(168,85,247,.15)">&#x1F510;</div>AWS IAM</div>
+          <span class="badge ${anyBad?'badge-fail':'badge-pass'}">${anyBad?'Issues Found':'Secure'}</span>
+        </div>
+        <div class="resource-prop"><span class="resource-prop-key">User Count</span><span class="resource-prop-val">${iam.UserCount||0}</span></div>
+        <div class="resource-prop"><span class="resource-prop-key">Role Count</span><span class="resource-prop-val">${iam.RoleCount||0}</span></div>
+        <div class="resource-prop"><span class="resource-prop-key">MFA Enabled</span>${boolProp(iam.mfa_enabled,'&#x2705; Yes','&#x274C; No')}</div>
+        <div class="resource-prop"><span class="resource-prop-key">Root Account Used</span>${boolProp(!iam.root_account_used,'&#x2705; No','&#x26A0; Yes — CRITICAL')}</div>
+        <div class="resource-prop"><span class="resource-prop-key">Unused Keys</span><span class="resource-prop-val ${iam.unused_keys>0?'err':'ok'}">${iam.unused_keys||0} users</span></div>
+        <div class="resource-prop"><span class="resource-prop-key">Password Policy</span><span class="resource-prop-val ${iam.password_policy==='weak'?'err':'ok'}">${escHtml(iam.password_policy||'–')}</span></div>
+        <div class="resource-prop"><span class="resource-prop-key">Least Privilege</span>${boolProp(iam.least_privilege,'&#x2705; Enforced','&#x274C; Not enforced')}</div>
+        ${Object.entries(mfaMap).map(([u,v])=>`
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">&#x1F464; ${escHtml(u)} MFA</span>${boolProp(v,'&#x2705; On','&#x274C; Off')}</div>
+        `).join('')}
+      </div>`);
+  }
+
+  // EC2
+  if (cfg.EC2) {
+    const ec2 = cfg.EC2;
+    const insts = ec2.Instances || [];
+    const anyBad = ec2.security_groups==='open' || !ec2.patch_compliance || !ec2.imds_v2;
+    cards.push(`
+      <div class="resource-card ${anyBad?'misconfigured':'secure'}">
+        <div class="resource-header">
+          <div class="resource-title"><div class="resource-icon" style="background:rgba(239,68,68,.13)">&#x1F5A5;</div>Amazon EC2</div>
+          <span class="badge ${anyBad?'badge-fail':'badge-pass'}">${anyBad?'Issues Found':'Secure'}</span>
+        </div>
+        ${insts.map(i=>`
+          <div class="resource-prop" style="margin-top:4px"><span class="resource-prop-key" style="font-weight:700">&#x1F4BB; ${escHtml(i.InstanceId)}</span><span class="resource-prop-val">${escHtml(i.State||'unknown')}</span></div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Security Groups</span><span class="resource-prop-val ${(i.SecurityGroups&&i.SecurityGroups.length)?'ok':'err'}">${(i.SecurityGroups&&i.SecurityGroups.length)?i.SecurityGroups.length+' attached':'&#x274C; None'}</span></div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Open Ports</span><span class="resource-prop-val ${(i.open_ports&&i.open_ports.length)?'err':'ok'}">${i.open_ports&&i.open_ports.length?i.open_ports.join(', '):'None'}</span></div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Public IP</span>${boolProp(!i.public_ip,'&#x2705; Private','&#x26A0; Exposed')}</div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">Patch Compliance</span>${boolProp(i.patch_compliance,'&#x2705; Compliant','&#x274C; Failing')}</div>
+          <div class="resource-prop" style="padding-left:10px"><span class="resource-prop-key">IMDSv2</span>${boolProp(i.imds_v2,'&#x2705; Enforced','&#x274C; Not enforced')}</div>
+        `).join('')}
+        <div class="resource-prop"><span class="resource-prop-key">Security Groups Config</span><span class="resource-prop-val ${ec2.security_groups==='open'?'err':'ok'}">${escHtml(ec2.security_groups||'–')}</span></div>
+      </div>`);
+  }
+
+  // RDS
+  if (cfg.RDS) {
+    const rds = cfg.RDS;
+    const list = rds.RDSInstances || [];
+    cards.push(`
+      <div class="resource-card ${list.length?'warning':'secure'}">
+        <div class="resource-header">
+          <div class="resource-title"><div class="resource-icon" style="background:rgba(6,182,212,.13)">&#x1F5C4;</div>Amazon RDS</div>
+          <span class="badge badge-info">${list.length} Instance${list.length!==1?'s':''}</span>
+        </div>
+        <div class="resource-prop"><span class="resource-prop-key">Total Instances</span><span class="resource-prop-val">${list.length}</span></div>
+        ${list.length===0?'<div class="resource-prop"><span class="resource-prop-key" style="color:var(--text-muted)">No instances configured</span></div>':''}
+      </div>`);
+  }
+
+  // VPC
+  if (cfg.VPC) {
+    const vpc = cfg.VPC;
+    const bad = !vpc.FlowLogs || vpc.DefaultVpcInUse;
+    cards.push(`
+      <div class="resource-card ${bad?'warning':'secure'}">
+        <div class="resource-header">
+          <div class="resource-title"><div class="resource-icon" style="background:rgba(245,158,11,.13)">&#x1F310;</div>Amazon VPC</div>
+          <span class="badge ${bad?'badge-warning':'badge-pass'}">${bad?'Review':'Secure'}</span>
+        </div>
+        <div class="resource-prop"><span class="resource-prop-key">VPC Count</span><span class="resource-prop-val">${vpc.VPCCount||0}</span></div>
+        <div class="resource-prop"><span class="resource-prop-key">Flow Logs</span>${boolProp(vpc.FlowLogs,'&#x2705; Enabled','&#x274C; Disabled')}</div>
+        <div class="resource-prop"><span class="resource-prop-key">Default VPC In Use</span>${boolProp(!vpc.DefaultVpcInUse,'&#x2705; No','&#x26A0; Yes')}</div>
+        <div class="resource-prop"><span class="resource-prop-key">Region</span><span class="resource-prop-val">${escHtml(cfg.Region||'–')}</span></div>
+      </div>`);
+  }
+
+  grid.innerHTML = cards.join('') || '<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">&#x1F4ED;</div><div class="empty-state-title">No resources found</div></div>';
+}
+
+/* ══════════════════════════════════════
+   SCAN HISTORY
+   ══════════════════════════════════════ */
+/* Cache of raw scan rows keyed by id — avoids passing data through onclick attrs */
+const scanHistoryCache = new Map();
+
+async function loadHistory() {
+  const tbody = document.getElementById('history-tbody');
+  tbody.innerHTML = '<tr><td colspan="7"><div class="loading-state"><div class="loading-spinner"></div><span>Loading...</span></div></td></tr>';
+  try {
+    const rows = await apiFetch('/api/scan-history');
+    scanHistoryCache.clear();
+    if (!rows.length) {
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">&#x1F552;</div><div class="empty-state-title">No scans yet</div><p>Run your first scan to see history here.</p></div></td></tr>`;
+      return;
+    }
+    // Store each row in cache for safe retrieval later
+    rows.forEach(r => scanHistoryCache.set(r.id, r));
+
+    tbody.innerHTML = rows.map(r => {
+      // Strip non-printable / non-ASCII characters for display only
+      const preview = stripNonPrintable(r.result || '').substring(0, 70);
+      const statusKey = r.status === 'completed' ? 'PASS' : r.status === 'failed' ? 'FAIL' : 'WARNING';
+      return `<tr>
+        <td class="text-muted">#${r.id}</td>
+        <td>${escHtml(r.username || 'System')}</td>
+        <td><span class="badge badge-info">${escHtml(r.scan_type || 'compliance')}</span></td>
+        <td>${statusBadge(statusKey)}</td>
+        <td style="color:var(--text-secondary);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${escHtml(stripNonPrintable(r.result || ''))}"
+        >${escHtml(preview) || '<em style="color:var(--text-muted)">No output</em>'}</td>
+        <td class="text-muted">${formatDate(r.scanned_at)}</td>
+        <td style="white-space:nowrap">
+          <button class="btn btn-sm btn-outline" onclick="viewScanDetail(${r.id})" style="margin-right:6px">Details</button>
+          <button class="btn btn-sm btn-danger"  onclick="deleteScan(${r.id})">Delete</button>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">&#x26A0;</div><div class="empty-state-title">${escHtml(e.message)}</div></div></td></tr>`;
+  }
+}
+
+async function deleteScan(id) {
+  if (!confirm(`Delete scan #${id}?`)) return;
+  try {
+    await apiFetch('/api/scan-history/' + id, { method: 'DELETE' });
+    showToast('Scan #' + id + ' deleted', 'success');
+    loadHistory();
+  } catch(e) { showToast('Delete failed: ' + e.message, 'error'); }
+}
+
+async function clearAllScans() {
+  if (!confirm('Delete ALL scan history? This cannot be undone.')) return;
+  try {
+    const r = await apiFetch('/api/scan-history/all', { method: 'DELETE' });
+    showToast(r.message, 'success');
+    loadHistory();
+  } catch(e) { showToast('Clear failed: ' + e.message, 'error'); }
+}
+
+function stripNonPrintable(str) {
+  // Remove non-printable chars (keeps newlines, tabs, and standard ASCII 0x20-0x7E)
+  return String(str).replace(/[^\x20-\x7E\n\r\t]/g, '');
+}
+
+function syntaxHighlightJSON(json) {
+  // Returns HTML string with coloured spans for JSON tokens
+  const escaped = json
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped.replace(
+    /("(\\u[a-zA-Z0-9]{4}|\\[^"]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    match => {
+      let cls = 'json-num';  // number
+      if (/^"/.test(match)) {
+        cls = /:$/.test(match) ? 'json-key' : 'json-str';
+      } else if (/true|false/.test(match)) {
+        cls = 'json-bool';
+      } else if (/null/.test(match)) {
+        cls = 'json-null';
+      }
+      return `<span class="${cls}">${match}</span>`;
+    }
+  );
+}
+
+function viewScanDetail(id) {
+  const row = scanHistoryCache.get(id);
+  if (!row) {
+    showToast('Scan data not found — refresh the history list and try again.', 'error');
+    return;
+  }
+
+  const statusKey = row.status === 'completed' ? 'PASS' : row.status === 'failed' ? 'FAIL' : 'WARNING';
+
+  // ── Modal title + meta badges ────────────────────────────────
+  document.getElementById('detail-modal-title').textContent = 'Scan #' + id + ' — Details';
+  document.getElementById('detail-meta').innerHTML = `
+    <span class="badge badge-info">ID: ${id}</span>
+    ${statusBadge(statusKey)}
+    <span class="badge badge-info">${escHtml(row.scan_type || 'compliance')}</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--text-muted)">${escHtml(formatDate(row.scanned_at))}</span>
+  `;
+
+  // Helper refs
+  const summaryEl  = document.getElementById('detail-summary');
+  const outputEl   = document.getElementById('detail-output');
+  const findWrap   = document.getElementById('detail-findings-wrap');
+  const findTbody  = document.getElementById('detail-findings-tbody');
+
+  // Reset visibility
+  summaryEl.style.display = 'none';
+  outputEl.style.display  = 'none';
+  findWrap.style.display  = 'none';
+
+  // ── Try to parse result as structured JSON ────────────────────
+  let parsed = null;
+  try { parsed = JSON.parse(row.result || ''); } catch (_) {}
+
+  const hasSummary  = parsed && parsed.summary  && typeof parsed.summary.total === 'number';
+  const hasFindings = parsed && Array.isArray(parsed.findings) && parsed.findings.length > 0;
+
+  if (hasSummary) {
+    const s = parsed.summary;
+    const scoreColor = s.score >= 80 ? '#22c55e' : s.score >= 50 ? '#f59e0b' : '#ef4444';
+    summaryEl.style.display = 'grid';
+    summaryEl.style.gridTemplateColumns = 'repeat(5,1fr)';
+    summaryEl.innerHTML = [
+      { label:'Total',    val: s.total,    color:'var(--accent-bright)' },
+      { label:'Passed',   val: s.passed,   color:'var(--green)' },
+      { label:'Failed',   val: s.failed,   color:'var(--red)' },
+      { label:'Warnings', val: s.warnings, color:'var(--yellow)' },
+      { label:'Score',    val: s.score+'%',color: scoreColor },
+    ].map(item => `
+      <div style="background:var(--bg-elevated);border-radius:8px;padding:12px 10px;text-align:center;border:1px solid var(--border)">
+        <div style="font-size:22px;font-weight:800;color:${item.color};line-height:1.1">${item.val}</div>
+        <div style="font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-top:4px">${item.label}</div>
+      </div>`).join('');
+  }
+
+  if (hasFindings) {
+    findWrap.style.display = 'block';
+    findTbody.innerHTML = parsed.findings.map(f => `
+      <tr>
+        <td><span class="badge badge-info">${escHtml(f.resource)}</span></td>
+        <td style="max-width:220px;word-break:break-word;font-size:12.5px">${escHtml(f.check)}</td>
+        <td>${statusBadge(f.status)}</td>
+        <td>${severityBadge(f.severity)}</td>
+        <td style="color:var(--text-secondary);max-width:220px;word-break:break-word;font-size:12px">${escHtml(f.recommendation)}</td>
+      </tr>`).join('');
+  }
+
+  // If we have neither structured data, show plain-text fallback
+  if (!hasSummary && !hasFindings) {
+    outputEl.style.display = 'block';
+    const clean = stripNonPrintable(row.result || '');
+    if (clean.trim()) {
+      outputEl.textContent = clean;
+    } else {
+      outputEl.textContent = '(no output recorded for this scan)';
+    }
+  }
+
+  // If we have structured data but also a java_output message, show it compactly
+  if (parsed && parsed.java_output && (hasSummary || hasFindings)) {
+    outputEl.style.display = 'block';
+    outputEl.style.marginTop = '14px';
+    outputEl.style.fontSize = '12px';
+    outputEl.textContent = 'Java engine: ' + parsed.java_output;
+  }
+
+  openModal('detail-modal');
+}
+
+/* ══════════════════════════════════════
+   SCAN
+   ══════════════════════════════════════ */
+async function triggerScan() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Scanning...';
+  const box = document.getElementById('scan-output-box');
+  box.style.display = 'block';
+  box.textContent = 'Starting compliance scan...\n';
+
+  try {
+    const res = await apiFetch('/api/scan', { method: 'POST' });
+    // Strip non-ASCII characters to avoid encoding display issues
+    const cleanOut = (res.output||'').replace(/[^\x20-\x7E\n\r\t]/g,'');
+    box.textContent += cleanOut + '\n\nScan ' + res.status.toUpperCase();
+    showToast('Scan ' + res.status + '!', res.status === 'completed' ? 'success' : 'error');
+    await loadDashboard();
+  } catch(e) {
+    box.textContent += '\nError: ' + e.message;
+    showToast('Scan failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#x26A1; Run Scan';
+  }
+}
+
+/* ══════════════════════════════════════
+   SETTINGS
+   ══════════════════════════════════════ */
+async function loadSettings() {
+  try {
+    const s = await apiFetch('/api/settings/status');
+    // DB
+    document.getElementById('db-dot').className   = 'status-dot ' + (s.db_connected ? 'green' : 'red pulse');
+    document.getElementById('db-status-label').textContent = s.db_connected ? 'PostgreSQL Connected' : 'PostgreSQL Disconnected';
+    document.getElementById('db-status-sub').textContent   = s.db_connected ? 'cspm_db @ localhost — OK' : (s.db_error||'Connection failed');
+    // Java
+    document.getElementById('java-dot').className   = 'status-dot ' + (s.java_ok ? 'green' : 'red pulse');
+    document.getElementById('java-status-label').textContent = s.java_ok ? 'Java Engine Ready' : 'Java Not Found';
+    // AWS region
+    if (s.settings && s.settings.aws_region)
+      document.getElementById('aws-region').value = s.settings.aws_region;
+  } catch(e) {
+    showToast('Could not load settings: ' + e.message, 'error');
+  }
+}
+
+async function saveSettings(e) {
+  e.preventDefault();
+  try {
+    const r = await apiFetch('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({ aws_region: document.getElementById('aws-region').value.trim() })
+    });
+    showToast('Settings saved!', 'success');
+  } catch(ex) { showToast('Save failed: ' + ex.message, 'error'); }
+}
+
+function toggleTheme(el) {
+  document.body.classList.toggle('light-mode', el.checked);
+  localStorage.setItem('cspm_light', el.checked ? '1' : '0');
+}
+
+/* ══════════════════════════════════════
+   AUTH
+   ══════════════════════════════════════ */
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function closeOnBackdrop(e, id) { if (e.target.id === id) closeModal(id); }
+function openAuthModal()  { openModal('auth-modal'); }
+function closeAuthModal() { closeModal('auth-modal'); }
+
+function switchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('tab-login').classList.toggle('active', isLogin);
+  document.getElementById('tab-register').classList.toggle('active', !isLogin);
+  document.getElementById('login-form').style.display    = isLogin ? '' : 'none';
+  document.getElementById('register-form').style.display = isLogin ? 'none' : '';
+  document.getElementById('auth-modal-title').textContent = isLogin ? 'Welcome Back' : 'Create Account';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('reg-error').style.display   = 'none';
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('login-submit');
+  const err = document.getElementById('login-error');
+  err.style.display = 'none';
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Signing in...';
+  try {
+    const d = await apiFetch('/api/auth/login', { method:'POST', body: JSON.stringify({
+      username: document.getElementById('login-username').value.trim(),
+      password: document.getElementById('login-password').value
+    })});
+    setAuth(d.token, d.username);
+    closeModal('auth-modal');
+    showToast('Welcome back, ' + d.username + '!', 'success');
+  } catch(ex) { err.textContent = ex.message; err.style.display = 'block'; }
+  finally { btn.disabled = false; btn.innerHTML = 'Sign In'; }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  const btn = document.getElementById('reg-submit');
+  const err = document.getElementById('reg-error');
+  err.style.display = 'none';
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Creating...';
+  try {
+    const d = await apiFetch('/api/auth/register', { method:'POST', body: JSON.stringify({
+      username: document.getElementById('reg-username').value.trim(),
+      email:    document.getElementById('reg-email').value.trim(),
+      password: document.getElementById('reg-password').value
+    })});
+    setAuth(d.token, d.username);
+    closeModal('auth-modal');
+    showToast('Account created! Welcome, ' + d.username, 'success');
+  } catch(ex) { err.textContent = ex.message; err.style.display = 'block'; }
+  finally { btn.disabled = false; btn.innerHTML = 'Create Account'; }
+}
+
+function setAuth(token, user) {
+  authToken = token; authUser = user;
+  localStorage.setItem('cspm_token', token);
+  localStorage.setItem('cspm_user',  user);
+  updateTopBar();
+}
+
+function logout() {
+  authToken = null; authUser = null;
+  localStorage.removeItem('cspm_token');
+  localStorage.removeItem('cspm_user');
+  updateTopBar();
+  showToast('Signed out', 'info');
+}
+
+function updateTopBar() {
+  const signedIn = !!(authUser && authToken);
+  document.getElementById('user-display-name').textContent = authUser || 'Guest';
+  document.getElementById('user-avatar').textContent       = authUser ? authUser[0].toUpperCase() : '?';
+  document.getElementById('user-role-label').textContent   = signedIn ? 'Security Analyst' : 'Not signed in';
+  const authBtnTxt = signedIn ? '&#x1F6AA; Sign Out' : '&#x1F511; Sign In';
+  document.getElementById('auth-btn').innerHTML            = authBtnTxt;
+  document.getElementById('auth-btn').onclick              = signedIn ? logout : openAuthModal;
+  document.getElementById('topbar-auth-btn').textContent   = signedIn ? 'Sign Out' : 'Sign In';
+  document.getElementById('topbar-auth-btn').onclick       = signedIn ? logout : openAuthModal;
+}
+
+/* ══════════════════════════════════════
+   UTILITIES
+   ══════════════════════════════════════ */
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDate(ts) {
+  if (!ts) return '-';
+  return new Date(ts).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'});
+}
+function showToast(msg, type='info') {
+  const icons = { success:'&#x2705;', error:'&#x274C;', warning:'&#x26A0;', info:'&#x2139;' };
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  el.innerHTML = `<span>${icons[type]||'&#x2139;'}</span><span>${escHtml(msg)}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4500);
+}
+</script>
+</body>
+</html>
