@@ -11,6 +11,10 @@ import json
 import os
 import subprocess
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from .env (if present) before anything else
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # ── App Setup ──────────────────────────────────────────────────────────────
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -30,7 +34,7 @@ DB_CONFIG = {
     "host":     os.environ.get("DB_HOST",     "localhost"),
     "database": os.environ.get("DB_NAME",     "cspm_db"),
     "user":     os.environ.get("DB_USER",     "postgres"),
-    "password": os.environ.get("DB_PASSWORD", "Amar100ni04"),
+    "password": os.environ.get("DB_PASSWORD"),          # set DB_PASSWORD in your .env – never hardcode
     "connect_timeout": 4,
 }
 
