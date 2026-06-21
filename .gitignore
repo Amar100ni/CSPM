@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+*.log
+
+# Java
+*.class
+*.jar
+
+# System
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Generated data
+backend/data/aws_config.json
+backend/data/report.json
+backend/logs/*
